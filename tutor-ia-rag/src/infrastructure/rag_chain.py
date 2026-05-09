@@ -1,29 +1,28 @@
 """Adapter RAGChain que implementa IRetriever para uso desde la API (FastAPI).
 
-Delega la búsqueda vectorial en ChromaVectorStore y la generación en ChatOpenAI.
+Delega la búsqueda vectorial en ChromaVectorStore y la generación en ChatOllama.
 La lógica de negocio (umbral de similitud, fallbacks) pertenece a AskTutorUC.
 """
-from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_ollama import ChatOllama
 
 from src.config import settings
 from src.domain.entities import DocumentChunk
 from src.domain.ports import IRetriever
 from src.infrastructure.vector_store import ChromaVectorStore
 
-_PROMPT_TEMPLATE = """\
-Sos un tutor de IA. Respondé en español usando SOLO el contexto provisto.
-Si no encontrás la respuesta, decilo claramente. No inventes información.
-
-Contexto:
-{context}
-
-Pregunta: {question}
-
-Respuesta:"""
+_SYSTEM_PROMPT = (
+    "INSTRUCCIÓN ABSOLUTA: Respondé en español usando ÚNICAMENTE "
+    "la información del contexto provisto. "
+    "PROHIBIDO usar conocimiento externo al contexto. "
+    "Si la información no está en el contexto, respondé EXACTAMENTE con esta frase: "
+    "'La información solicitada no está disponible en el material del curso.' "
+    "No agregues texto adicional a esa frase."
+)
 
 
 class RAGChain(IRetriever):
-    """Implementa IRetriever delegando en ChromaVectorStore y ChatOpenAI.
+    """Implementa IRetriever delegando en ChromaVectorStore y ChatOllama.
 
     Args:
         vector_store: Instancia de ChromaVectorStore para búsqueda vectorial.
@@ -36,9 +35,9 @@ class RAGChain(IRetriever):
 
     def __init__(self, vector_store: ChromaVectorStore) -> None:
         self._vector_store = vector_store
-        self._llm = ChatOpenAI(
+        self._llm = ChatOllama(
             model=settings.chat_model,
-            api_key=settings.openai_api_key,
+            base_url=settings.ollama_base_url,
             temperature=0,
         )
 
@@ -78,6 +77,9 @@ class RAGChain(IRetriever):
         context = "\n\n---\n\n".join(
             f"[Fuente: {c.source}]\n{c.content}" for c in chunks
         )
-        prompt = _PROMPT_TEMPLATE.format(context=context, question=query)
-        response = self._llm.invoke(prompt)
+        messages = [
+            SystemMessage(content=_SYSTEM_PROMPT),
+            HumanMessage(content=f"Contexto:\n{context}\n\nPregunta: {query}"),
+        ]
+        response = self._llm.invoke(messages)
         return response.content

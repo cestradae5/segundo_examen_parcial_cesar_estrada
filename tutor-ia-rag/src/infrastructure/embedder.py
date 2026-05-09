@@ -1,11 +1,11 @@
-from langchain_openai import OpenAIEmbeddings
+from langchain_ollama import OllamaEmbeddings
 
 from src.config import settings
 
 
-def build_embeddings() -> OpenAIEmbeddings:
-    """Factory que construye el modelo de embeddings de OpenAI."""
-    return OpenAIEmbeddings(
+def build_embeddings() -> OllamaEmbeddings:
+    """Factory que construye el modelo de embeddings con Ollama."""
+    return OllamaEmbeddings(
         model=settings.embed_model,
-        api_key=settings.openai_api_key,
+        base_url=settings.ollama_base_url,
     )
